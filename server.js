@@ -11,6 +11,8 @@ dotenv.config();
 const PORT = process.env.PORT || 5000;
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use(cors());
 
 // Conexão com MongoDB
@@ -156,7 +158,8 @@ app.post("/api/inscricao", async (req, res) => {
 // Webhook para confirmar pagamento e enviar email
 app.post("/api/webhook", async (req, res) => {
   try {
-    const payment = req.body;
+      const payment = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
 
     if (payment.type === "payment" && payment.data && payment.data.id) {
       const mpResponse = await fetch(

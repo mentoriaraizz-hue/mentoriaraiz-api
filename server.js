@@ -1,0 +1,243 @@
+import express from "express";
+import mongoose from "mongoose";
+import cors from "cors";
+import dotenv from "dotenv";
+import fetch from "node-fetch";
+import nodemailer from "nodemailer";
+import { MercadoPagoConfig, Preference } from "mercadopago";
+
+dotenv.config();
+
+const PORT = process.env.PORT || 5000;
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// Conexão com MongoDB
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("MongoDB conectado"))
+  .catch((err) => console.error("Erro ao conectar no MongoDB:", err));
+
+// Modelo de inscrição
+const FormSchema = new mongoose.Schema({
+  tipo: { type: String, required: true },
+  nome: String,
+  idade: Number,
+  email: String,
+  whatsapp: String,
+  profissao: String,
+  empresa: String,
+  outraProfissao: String,
+  socios: [
+    {
+      nome: String,
+      email: String,
+    },
+  ],
+  data: { type: Date, default: Date.now },
+  paymentId: String,
+});
+
+const Form = mongoose.model("Form", FormSchema);
+
+// Configuração Mercado Pago
+const mpClient = new MercadoPagoConfig({
+  accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
+});
+
+// Configuração do Nodemailer
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+// Função para enviar e-mail de confirmação
+async function enviarEmailConfirmacao(destinatario, nome) {
+  const mailOptions = {
+    from: `"Mentoria Raiz" <${process.env.SMTP_USER}>`,
+    to: destinatario,
+    subject: "Pagamento Confirmado - Bem-vindo(a) à Mentoria Raiz!",
+    html: `
+      <p>Olá ${nome},</p>
+      <p>Seu pagamento foi aprovado com sucesso!</p>
+      <p>Entre no nosso grupo exclusivo pelo link abaixo:</p>
+      <a href="https://link-do-grupo.com">Grupo Especial Mentoria Raiz</a>
+      <p>Obrigado por confiar em nossa mentoria.</p>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
+// Contar inscritos individuais confirmados
+async function getIndividualCount() {
+  return await Form.countDocuments({ tipo: "individual" });
+}
+
+// Rota para criar pagamento
+app.post("/api/inscricao", async (req, res) => {
+  try {
+    const {
+      tipo,
+      nome,
+      idade,
+      email,
+      whatsapp,
+      profissao,
+      empresa,
+      outraProfissao,
+      socios,
+    } = req.body;
+
+    let preco;
+    if (tipo === "individual") {
+      const count = await getIndividualCount();
+      preco = count < 5 ? 2997 : 3597;
+    } else if (tipo === "socios") {
+      preco = 5597;
+    } else {
+      return res.status(400).json({ error: "Tipo inválido" });
+    }
+
+    const preference = new Preference(mpClient);
+    const result = await preference.create({
+      body: {
+        items: [
+          {
+            title:
+              tipo === "individual"
+                ? "Mentoria Raiz - Plano Individual"
+                : "Mentoria Raiz - Plano Sócios",
+            description: "Acesso completo à Mentoria Raiz por 3 meses",
+            picture_url: "https://seudominio.com/imagens/mentoria-individual.png",
+            category_id: "services",
+            quantity: 1,
+            currency_id: "BRL",
+            unit_price: preco,
+          },
+        ],
+        payer: {
+          name: nome,
+          email: email,
+        },
+        back_urls: {
+          success: `${process.env.FRONTEND_URL}/sucesso`,
+          failure: `${process.env.FRONTEND_URL}/falha`,
+          pending: `${process.env.FRONTEND_URL}/pendente`,
+        },
+        auto_return: "approved",
+        metadata: {
+          tipo,
+          nome,
+          idade,
+          email,
+          whatsapp,
+          profissao,
+          empresa,
+          outraProfissao,
+          socios,
+        },
+      },
+    });
+
+    res.json({ init_point: result.init_point });
+  } catch (error) {
+    console.error("Erro na rota /api/inscricao:", error);
+    res.status(500).json({ error: error.message || "Erro no processamento" });
+  }
+});
+
+// Webhook para confirmar pagamento e enviar email
+app.post("/api/webhook", async (req, res) => {
+  try {
+    const payment = req.body;
+
+    if (payment.type === "payment" && payment.data && payment.data.id) {
+      const mpResponse = await fetch(
+        `https://api.mercadopago.com/v1/payments/${payment.data.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+          },
+        }
+      );
+      const mpData = await mpResponse.json();
+
+      if (mpData.status === "approved") {
+        const meta = mpData.metadata || {};
+
+        const novoCadastro = new Form({
+          tipo: meta.tipo,
+          nome: meta.nome,
+          idade: meta.idade,
+          email: meta.email,
+          whatsapp: meta.whatsapp,
+          profissao: meta.profissao,
+          empresa: meta.empresa,
+          outraProfissao: meta.outraProfissao,
+          socios: meta.tipo === "socios" ? meta.socios : undefined,
+          paymentId: mpData.id,
+        });
+
+        await novoCadastro.save();
+        console.log("✅ Cadastro confirmado e salvo:", novoCadastro);
+
+        // Envia o e-mail de confirmação
+        await enviarEmailConfirmacao(meta.email, meta.nome);
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("Erro no webhook:", error);
+    res.sendStatus(500);
+  }
+});
+
+// Rota para buscar pagamento pelo ID
+app.get("/api/pagamento/:paymentId", async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const response = await fetch(
+      `https://api.mercadopago.com/v1/payments/${paymentId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Pagamento não encontrado" });
+    }
+
+    const paymentData = await response.json();
+    res.json(paymentData);
+  } catch (error) {
+    console.error("Erro ao buscar pagamento:", error);
+    res.status(500).json({ error: "Erro interno no servidor" });
+  }
+});
+
+// Páginas simples para sucesso, falha e pendente
+app.get("/sucesso", (req, res) => {
+  res.send("<h1>Pagamento aprovado! Obrigado pela sua compra.</h1>");
+});
+
+app.get("/falha", (req, res) => {
+  res.send("<h1>Pagamento falhou. Tente novamente.</h1>");
+});
+
+app.get("/pendente", (req, res) => {
+  res.send("<h1>Pagamento pendente. Aguarde a confirmação.</h1>");
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+});

@@ -110,9 +110,9 @@ app.post("/api/inscricao", async (req, res) => {
     let preco;
     if (tipo === "individual") {
       const count = await getIndividualCount();
-      preco = count < 5 ? .01 :.02;
+      preco = count < 5 ? 2997 :3597;
     } else if (tipo === "socios") {
-      preco = .01;
+      preco = 5597;
     } else {
       return res.status(400).json({ error: "Tipo inválido" });
     }

@@ -5,21 +5,22 @@ import dotenv from "dotenv";
 import fetch from "node-fetch";
 import nodemailer from "nodemailer";
 import { MercadoPagoConfig, Preference } from "mercadopago";
-
+import { verifyAdminToken } from "./middleware/verifyAdminToken.js";
 dotenv.config();
-
 const PORT = process.env.PORT || 5000;
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 app.use(cors());
-
 // Conexão com MongoDB
-mongoose
-  .connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB conectado"))
   .catch((err) => console.error("Erro ao conectar no MongoDB:", err));
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import AdminUser from "./models/adminUser.js";
+
+
 
 // Modelo de inscrição
 const FormSchema = new mongoose.Schema({
@@ -39,6 +40,8 @@ const FormSchema = new mongoose.Schema({
   ],
   data: { type: Date, default: Date.now },
   paymentId: String,
+  valor: Number,
+  status: String,
 });
 
 const Form = mongoose.model("Form", FormSchema);
@@ -69,7 +72,7 @@ async function enviarEmailConfirmacao(destinatario, nome) {
       <p>Olá ${nome},</p>
       <p>Seu pagamento foi aprovado com sucesso!</p>
       <p>Entre no nosso grupo exclusivo pelo link abaixo:</p>
-      <a href="https://link-do-grupo.com">Grupo Especial Mentoria Raiz</a>
+      <a href="https://chat.whatsapp.com/KOpFkKvy1ES5LdVGCbSJ3u">Grupo Especial Mentoria Raiz</a>
       <p>Obrigado por confiar em nossa mentoria.</p>
     `,
   };
@@ -91,6 +94,7 @@ app.post("/api/inscricao", async (req, res) => {
       idade,
       email,
       whatsapp,
+      whatsapp2,
       profissao,
       empresa,
       outraProfissao,
@@ -116,8 +120,8 @@ app.post("/api/inscricao", async (req, res) => {
               tipo === "individual"
                 ? "Mentoria Raiz - Plano Individual"
                 : "Mentoria Raiz - Plano Sócios",
-            description: "Acesso completo à Mentoria Raiz por 3 meses",
-            picture_url: "https://seudominio.com/imagens/mentoria-individual.png",
+            description: "Acesso completo à Mentoria Raiz por 3 meses. Encontros ao vivo quinzenais com Thalyta Eloah. Acesso ao grupo exclusivo de mentorados(as). Materiais práticos e exercícios de implementação.  Desafios mensais com foco em progresso real. Uma jornada de 3 meses de transformação.",
+            picture_url: "https://i.postimg.cc/FRB6v5t6/mentoria.png",
             category_id: "services",
             quantity: 1,
             currency_id: "BRL",
@@ -140,6 +144,7 @@ app.post("/api/inscricao", async (req, res) => {
           idade,
           email,
           whatsapp,
+          whatsapp2,
           profissao,
           empresa,
           outraProfissao,
@@ -158,10 +163,10 @@ app.post("/api/inscricao", async (req, res) => {
 // Webhook para confirmar pagamento e enviar email
 app.post("/api/webhook", async (req, res) => {
   try { 
-        console.log("📩 Webhook recebido:", req.body); // <-- Aqui
+      
       const payment = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    if (payment.type === "payment" && payment.data && payment.data.id) {
+      if (payment.type === "payment" && payment.data && payment.data.id) {
       const mpResponse = await fetch(
         `https://api.mercadopago.com/v1/payments/${payment.data.id}`,
         {
@@ -185,12 +190,15 @@ app.post("/api/webhook", async (req, res) => {
           empresa: meta.empresa,
           outraProfissao: meta.outraProfissao,
           socios: meta.tipo === "socios" ? meta.socios : undefined,
+          whatsapp2: meta.tipo === "socios" ? meta.socios : undefined,
           paymentId: mpData.id,
+          valor: mpData.transaction_amount,
+          status: mpData.status,
         });
 
         await novoCadastro.save();
         console.log("✅ Cadastro confirmado e salvo:", novoCadastro);
-
+        
         // Envia o e-mail de confirmação
         await enviarEmailConfirmacao(meta.email, meta.nome);
       }
@@ -240,6 +248,59 @@ app.get("/falha", (req, res) => {
 app.get("/pendente", (req, res) => {
   res.send("<h1>Pagamento pendente. Aguarde a confirmação.</h1>");
 });
+
+// Login admin
+app.post("/api/admin/login", async (req, res) => {
+  const { username, password } = req.body;
+  const admin = await AdminUser.findOne({ username });
+  if (!admin) return res.status(401).json({ message: "Usuário ou senha inválidos" });
+   console.log("Senha digitada:", password);
+   console.log("Senha no banco (hash):", admin.password);
+
+  const valid = await bcrypt.compare(password, admin.password);
+
+  if (!valid) return res.status(401).json({ message: "Usuário ou senha inválidos" });
+
+  const token = jwt.sign(
+    { id: admin._id, username: admin.username },
+    process.env.JWT_SECRET,
+    { expiresIn: "2h" }
+  );
+
+  res.json({ token });
+});
+
+
+app.get("/api/admin/dashboard", verifyAdminToken, async (req, res) => {
+  try {
+    const { search } = req.query;
+
+    let filtro = {};
+    if (search && search.trim() !== "") {
+      filtro = {
+        $or: [
+          { nome: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { whatsapp: { $regex: search, $options: "i" } }
+        ]
+      };
+    }
+
+    const inscritos = await Form.find(filtro).lean();
+
+    res.json({
+      message: "Acesso autorizado ao dashboard",
+      admin: req.admin,
+      inscritos,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar inscritos:", error);
+    res.status(500).json({ error: "Erro ao buscar inscritos" });
+  }
+});
+
+
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);

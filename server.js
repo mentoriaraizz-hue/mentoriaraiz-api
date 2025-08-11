@@ -100,9 +100,9 @@ app.post("/api/inscricao", async (req, res) => {
     let preco;
     if (tipo === "individual") {
       const count = await getIndividualCount();
-      preco = count < 5 ? 2997 : 3597;
+      preco = count < 5 ? .01 :.02;
     } else if (tipo === "socios") {
-      preco = 5597;
+      preco = .01;
     } else {
       return res.status(400).json({ error: "Tipo inválido" });
     }
@@ -157,9 +157,9 @@ app.post("/api/inscricao", async (req, res) => {
 
 // Webhook para confirmar pagamento e enviar email
 app.post("/api/webhook", async (req, res) => {
-  try {
+  try { 
+        console.log("📩 Webhook recebido:", req.body); // <-- Aqui
       const payment = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
 
     if (payment.type === "payment" && payment.data && payment.data.id) {
       const mpResponse = await fetch(

@@ -34,8 +34,14 @@ const FormSchema = new mongoose.Schema({
   outraProfissao: String,
   socios: [
     {
-      nome: String,
-      email: String,
+      nomeSocio1: String,
+      nomeSocio2: String,
+      emailSocio1: String,
+      emailSocio2: String,
+      whatsappSocio:String,
+      whatsappSocio2:String,
+      empresaSocio:String,
+      profissaoSocio:String
     },
   ],
   data: { type: Date, default: Date.now },

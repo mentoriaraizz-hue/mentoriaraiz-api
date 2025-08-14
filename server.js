@@ -25,29 +25,34 @@ import AdminUser from "./models/adminUser.js";
 // Modelo de inscrição
 const FormSchema = new mongoose.Schema({
   tipo: { type: String, required: true },
-  nome: String,
-  idade: Number,
-  email: String,
-  whatsapp: String,
-  profissao: String,
-  empresa: String,
-  outraProfissao: String,
-  socios: [
-    {
-      nomeSocio1: String,
-      nomeSocio2: String,
-      emailSocio1: String,
-      emailSocio2: String,
-      whatsappSocio:String,
-      whatsappSocio2:String,
-      empresaSocio:String,
-      profissaoSocio:String
-    },
-  ],
+
+  // Campos tipo individual
+  nome: { type: String, required: false },
+  idade: { type: Number, required: false },
+  email: { type: String, required: false },
+  whatsapp: { type: String, required: false },
+  profissao: { type: String, required: false },
+  empresa: { type: String, required: false },
+  outraProfissao: { type: String, required: false },
+
+  // Campos tipo sócios
+  nomeSocio1: { type: String, required: false },
+  nomeSocio2: { type: String, required: false },
+  idadeSocio1: { type: String, required: false },
+  idadeSocio2: { type: String, required: false },
+  emailSocio1: { type: String, required: false },
+  emailSocio2: { type: String, required: false },
+  whatsappSocio1: { type: String, required: false },
+  whatsappSocio2: { type: String, required: false },
+  profissaoSocio1: { type: String, required: false },
+  profissaoSocio2: { type: String, required: false },
+  empresaSocio: { type: String, required: false },
+
+  // Extras
   data: { type: Date, default: Date.now },
-  paymentId: String,
-  valor: Number,
-  status: String,
+  paymentId: { type: String, required: false },
+  valor: { type: Number, required: false },
+  status: { type: String, required: false }
 });
 
 const Form = mongoose.model("Form", FormSchema);
@@ -94,25 +99,59 @@ async function getIndividualCount() {
 // Rota para criar pagamento
 app.post("/api/inscricao", async (req, res) => {
   try {
-    const {
-      tipo,
-      nome,
-      idade,
-      email,
-      whatsapp,
-      whatsapp2,
-      profissao,
-      empresa,
-      outraProfissao,
-      socios,
-    } = req.body;
+    const { tipo } = req.body;
 
     let preco;
+    let metadata = {};
+
     if (tipo === "individual") {
+      const { nome, idade, email, whatsapp, profissao, empresa} = req.body;
+
       const count = await getIndividualCount();
-      preco = count < 5 ? 2997 :3597;
+      preco = count < 5 ? 0.1 : 3597;
+
+      metadata = {
+        tipo,
+        nome,
+        idade,
+        email,
+        whatsapp,
+        profissao,
+        empresa: profissao === "empreendedor" ? empresa : "",
+        outraProfissao
+      };
+
     } else if (tipo === "socios") {
-      preco = 5597;
+      const {
+        nomeSocio1,
+        idadeSocio1,
+        emailSocio1,
+        profissaoSocio1,
+        whatsappSocio1,
+        nomeSocio2,
+        idadeSocio2,
+        emailSocio2,
+        whatsappSocio2,
+        profissaoSocio2,
+        empresaSocio
+      } = req.body;
+
+      preco = 0.01;
+
+      metadata = {
+        tipo,
+        nomeSocio1: nomeSocio1,
+        idadeSocio1:idadeSocio1,
+        emailSocio1: emailSocio1,
+        nome2Socio2: nomeSocio2,
+        idadeSocio2: idadeSocio2,
+        emailSocio2: emailSocio2,
+        whatsappSocio1: whatsappSocio1,
+        whatsappSocio2: whatsappSocio2,
+        profissaoSocio: profissaoSocio1,
+        profissaoSocio2: profissaoSocio2,
+        empresa: profissaoSocio1 === "empreendedor" ? empresaSocio : ""
+      };
     } else {
       return res.status(400).json({ error: "Tipo inválido" });
     }
@@ -122,11 +161,10 @@ app.post("/api/inscricao", async (req, res) => {
       body: {
         items: [
           {
-            title:
-              tipo === "individual"
-                ? "Mentoria Raiz - Plano Individual"
-                : "Mentoria Raiz - Plano Sócios",
-            description: "Acesso completo à Mentoria Raiz por 3 meses. Encontros ao vivo quinzenais com Thalyta Eloah. Acesso ao grupo exclusivo de mentorados(as). Materiais práticos e exercícios de implementação.  Desafios mensais com foco em progresso real. Uma jornada de 3 meses de transformação.",
+            title: tipo === "individual"
+              ? "Mentoria Raiz - Plano Individual"
+              : "Mentoria Raiz - Plano Sócios",
+            description: "Acesso completo à Mentoria Raiz por 3 meses...",
             picture_url: "https://i.postimg.cc/FRB6v5t6/mentoria.png",
             category_id: "services",
             quantity: 1,
@@ -135,8 +173,8 @@ app.post("/api/inscricao", async (req, res) => {
           },
         ],
         payer: {
-          name: nome,
-          email: email,
+          name: metadata.nome,
+          email: metadata.email,
         },
         back_urls: {
           success: `${process.env.FRONTEND_URL}/sucesso`,
@@ -144,18 +182,7 @@ app.post("/api/inscricao", async (req, res) => {
           pending: `${process.env.FRONTEND_URL}/pendente`,
         },
         auto_return: "approved",
-        metadata: {
-          tipo,
-          nome,
-          idade,
-          email,
-          whatsapp,
-          whatsapp2,
-          profissao,
-          empresa,
-          outraProfissao,
-          socios,
-        },
+        metadata // já vai só com os campos planos
       },
     });
 
@@ -166,13 +193,13 @@ app.post("/api/inscricao", async (req, res) => {
   }
 });
 
+
 // Webhook para confirmar pagamento e enviar email
 app.post("/api/webhook", async (req, res) => {
-  try { 
-      
-      const payment = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+  try {
+    const payment = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-      if (payment.type === "payment" && payment.data && payment.data.id) {
+    if (payment.type === "payment" && payment.data && payment.data.id) {
       const mpResponse = await fetch(
         `https://api.mercadopago.com/v1/payments/${payment.data.id}`,
         {
@@ -185,27 +212,49 @@ app.post("/api/webhook", async (req, res) => {
 
       if (mpData.status === "approved") {
         const meta = mpData.metadata || {};
+        let data = {};
 
-        const novoCadastro = new Form({
-          tipo: meta.tipo,
-          nome: meta.nome,
-          idade: meta.idade,
-          email: meta.email,
-          whatsapp: meta.whatsapp,
-          profissao: meta.profissao,
-          empresa: meta.empresa,
-          outraProfissao: meta.outraProfissao,
-          socios: meta.tipo === "socios" ? meta.socios : undefined,
-          whatsapp2: meta.tipo === "socios" ? meta.socios : undefined,
-          paymentId: mpData.id,
-          valor: mpData.transaction_amount,
-          status: mpData.status,
-        });
+        if (meta.tipo === "individual") {
+          data = {
+            tipo: meta.tipo,
+            nome: meta.nome,
+            idade: meta.idade,
+            email: meta.email,
+            whatsapp: meta.whatsapp,
+            profissao: meta.profissao,
+            empresa: meta.empresa,
+            outraProfissao: meta.outraProfissao,
+            paymentId: mpData.id,
+            valor: mpData.transaction_amount,
+            status: mpData.status,
+          };
+        } 
+        else if (meta.tipo === "socios") {
+          data = {
+            tipo: meta.tipo,
+            nomeSocio1: meta.nomeSocio1,
+            idadeSocio1: meta.idadeSocio1,
+            idadeSoci02: meta.idadeSocio1,
+            nomeSocio2: meta.nomeSocio2,
+            email: meta.emailSocio1,
+            emailSocio2: meta.emailSocio2,
+            whatsappSocio: meta.whatsappSocio1,
+            whatsappSocio2: meta.whatsappSocio2,
+            profissaoSocio: meta.profissaoSocio1,
+            profissaoSocio2: meta.profissaoSocio2,
+            empresa: meta.profissaoSocio === "empreendedor" ? meta.empresaSocio : "",
+            paymentId: mpData.id,
+            valor: mpData.transaction_amount,
+            status: mpData.status,
+          };
+        }
 
+        const novoCadastro = new Form(data);
         await novoCadastro.save();
+
         console.log("✅ Cadastro confirmado e salvo:", novoCadastro);
-        
-        // Envia o e-mail de confirmação
+
+        // E-mail de confirmação
         await enviarEmailConfirmacao(meta.email, meta.nome);
       }
     }
@@ -216,6 +265,7 @@ app.post("/api/webhook", async (req, res) => {
     res.sendStatus(500);
   }
 });
+
 
 // Rota para buscar pagamento pelo ID
 app.get("/api/pagamento/:paymentId", async (req, res) => {

@@ -118,7 +118,6 @@ app.post("/api/inscricao", async (req, res) => {
         whatsapp,
         profissao,
         empresa: profissao === "empreendedor" ? empresa : "",
-        outraProfissao
       };
 
     } else if (tipo === "socios") {
@@ -148,7 +147,7 @@ app.post("/api/inscricao", async (req, res) => {
         emailSocio2: emailSocio2,
         whatsappSocio1: whatsappSocio1,
         whatsappSocio2: whatsappSocio2,
-        profissaoSocio: profissaoSocio1,
+        profissaoSocio1: profissaoSocio1,
         profissaoSocio2: profissaoSocio2,
         empresaSocio: profissaoSocio1 === "empreendedor" ? empresaSocio : ""
       };
@@ -235,15 +234,15 @@ app.post("/api/webhook", async (req, res) => {
             tipo: meta.tipo,
             nomeSocio1: meta.nomeSocio1,
             idadeSocio1: meta.idadeSocio1,
-            idadeSocio2: meta.idadeSocio1,
+            idadeSocio2: meta.idadeSocio2,
             nomeSocio2: meta.nomeSocio2,
-            email: meta.emailSocio1,
+            emailSocio1: meta.emailSocio1,
             emailSocio2: meta.emailSocio2,
-            whatsappSocio: meta.whatsappSocio1,
+            whatsappSocio1: meta.whatsappSocio1,
             whatsappSocio2: meta.whatsappSocio2,
-            profissaoSocio: meta.profissaoSocio1,
+            profissaoSocio1: meta.profissaoSocio1,
             profissaoSocio2: meta.profissaoSocio2,
-            empresa: meta.profissaoSocio === "empreendedor" ? meta.empresaSocio : "",
+            empresa: meta.profissaoSocio1 === "empreendedor" ? meta.empresaSocio : "",
             paymentId: mpData.id,
             valor: mpData.transaction_amount,
             status: mpData.status,

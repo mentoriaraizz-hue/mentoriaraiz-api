@@ -143,14 +143,14 @@ app.post("/api/inscricao", async (req, res) => {
         nomeSocio1: nomeSocio1,
         idadeSocio1:idadeSocio1,
         emailSocio1: emailSocio1,
-        nome2Socio2: nomeSocio2,
+        nomeSocio2: nomeSocio2,
         idadeSocio2: idadeSocio2,
         emailSocio2: emailSocio2,
         whatsappSocio1: whatsappSocio1,
         whatsappSocio2: whatsappSocio2,
         profissaoSocio: profissaoSocio1,
         profissaoSocio2: profissaoSocio2,
-        empresa: profissaoSocio1 === "empreendedor" ? empresaSocio : ""
+        empresaSocio: profissaoSocio1 === "empreendedor" ? empresaSocio : ""
       };
     } else {
       return res.status(400).json({ error: "Tipo inválido" });
@@ -199,6 +199,8 @@ app.post("/api/webhook", async (req, res) => {
   try {
     const payment = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
+    
+
     if (payment.type === "payment" && payment.data && payment.data.id) {
       const mpResponse = await fetch(
         `https://api.mercadopago.com/v1/payments/${payment.data.id}`,
@@ -223,7 +225,6 @@ app.post("/api/webhook", async (req, res) => {
             whatsapp: meta.whatsapp,
             profissao: meta.profissao,
             empresa: meta.empresa,
-            outraProfissao: meta.outraProfissao,
             paymentId: mpData.id,
             valor: mpData.transaction_amount,
             status: mpData.status,
@@ -234,7 +235,7 @@ app.post("/api/webhook", async (req, res) => {
             tipo: meta.tipo,
             nomeSocio1: meta.nomeSocio1,
             idadeSocio1: meta.idadeSocio1,
-            idadeSoci02: meta.idadeSocio1,
+            idadeSocio2: meta.idadeSocio1,
             nomeSocio2: meta.nomeSocio2,
             email: meta.emailSocio1,
             emailSocio2: meta.emailSocio2,
@@ -248,7 +249,7 @@ app.post("/api/webhook", async (req, res) => {
             status: mpData.status,
           };
         }
-
+          console.log(mpData.metadata)
         const novoCadastro = new Form(data);
         await novoCadastro.save();
 

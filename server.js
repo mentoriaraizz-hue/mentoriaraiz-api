@@ -74,22 +74,51 @@ const transporter = nodemailer.createTransport({
 });
 
 // Função para enviar e-mail de confirmação
-async function enviarEmailConfirmacao(destinatario, nome) {
-  const mailOptions = {
-    from: `"Mentoria Raiz" <${process.env.SMTP_USER}>`,
-    to: destinatario,
-    subject: "Pagamento Confirmado - Bem-vindo(a) à Mentoria Raiz!",
-    html: `
-      <p>Olá ${nome},</p>
-      <p>Seu pagamento foi aprovado com sucesso!</p>
-      <p>Entre no nosso grupo exclusivo pelo link abaixo:</p>
-      <a href="https://chat.whatsapp.com/KOpFkKvy1ES5LdVGCbSJ3u">Grupo Especial Mentoria Raiz</a>
-      <p>Obrigado por confiar em nossa mentoria.</p>
-    `,
-  };
-
-  await transporter.sendMail(mailOptions);
+async function enviarEmailConfirmacao(meta) {
+  if (meta.tipo === "individual") {
+    const mailOptions = {
+      from: `"Mentoria Raiz" <${process.env.SMTP_USER}>`,
+      to: meta.email,
+      subject: "Pagamento Confirmado - Bem-vindo(a) à Mentoria Raiz!",
+      html: `
+        <h2>Olá ${meta.nome},</h2>
+        <p>Seu pagamento do <strong>Plano Individual</strong> foi aprovado com sucesso!</p>
+        <p>Entre no nosso grupo exclusivo pelo link abaixo:</p>
+        <a href="https://chat.whatsapp.com/KOpFkKvy1ES5LdVGCbSJ3u">Grupo Especial Mentoria Raiz</a>
+        <p>Obrigado por confiar em nossa mentoria.</p>
+      `,
+    };
+    await transporter.sendMail(mailOptions);
+  } else if (meta.tipo === "socios") {
+    const mailSocio1 = {
+      from: `"Mentoria Raiz" <${process.env.SMTP_USER}>`,
+      to: meta.emailSocio1,
+      subject: "Pagamento Confirmado - Bem-vindo(a) à Mentoria Raiz!",
+      html: `
+        <h2>Olá ${meta.nomeSocio1},</h2>
+        <p>Seu pagamento do <strong>Plano Sócios</strong> foi aprovado com sucesso!</p>
+        <p>Entre no nosso grupo exclusivo pelo link abaixo:</p>
+        <a href="https://chat.whatsapp.com/KOpFkKvy1ES5LdVGCbSJ3u">Grupo Especial Mentoria Raiz</a>
+        <p>Obrigado por confiar em nossa mentoria.</p>
+      `,
+    };
+    const mailSocio2 = {
+      from: `"Mentoria Raiz" <${process.env.SMTP_USER}>`,
+      to: meta.emailSocio2,
+      subject: "Pagamento Confirmado - Bem-vindo(a) à Mentoria Raiz!",
+      html: `
+        <h2>Olá ${meta.nomeSocio2},</h2>
+        <p>Seu pagamento do <strong>Plano Sócios</strong> foi aprovado com sucesso!</p>
+        <p>Entre no nosso grupo exclusivo pelo link abaixo:</p>
+        <a href="https://chat.whatsapp.com/KOpFkKvy1ES5LdVGCbSJ3u">Grupo Especial Mentoria Raiz</a>
+        <p>Obrigado por confiar em nossa mentoria.</p>
+      `,
+    };
+    await transporter.sendMail(mailSocio1);
+    await transporter.sendMail(mailSocio2);
+  }
 }
+
 
 // Contar inscritos individuais confirmados
 async function getIndividualCount() {
@@ -257,8 +286,14 @@ app.post("/api/webhook", async (req, res) => {
 
         console.log("✅ Cadastro confirmado e salvo:", novoCadastro);
 
-        // E-mail de confirmação (se precisar, pode desativar temporariamente)
-        // await enviarEmailConfirmacao(meta.email, meta.nome);
+        // E-mail de confirmação 
+         await enviarEmailConfirmacao(meta);
+         try {
+        await enviarEmailConfirmacao(meta);
+        console.log("📧 E-mail enviado com sucesso!");
+        } catch (err) {
+        console.error("❌ Erro ao enviar e-mail:", err);
+        }
       }
     }
 
@@ -269,6 +304,29 @@ app.post("/api/webhook", async (req, res) => {
   }
 });
 
+app.get("/api/pagamento/:paymentId", async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const response = await fetch(
+      `https://api.mercadopago.com/v1/payments/${paymentId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Pagamento não encontrado" });
+    }
+
+    const paymentData = await response.json();
+    res.json(paymentData);
+  } catch (error) {
+    console.error("Erro ao buscar pagamento:", error);
+    res.status(500).json({ error: "Erro interno no servidor" });
+  }
+});
 
 app.get("/api/admin/dashboard", verifyAdminToken, async (req, res) => {
   try {

@@ -328,6 +328,37 @@ app.get("/api/pagamento/:paymentId", async (req, res) => {
   }
 });
 
+// Rota de login admin
+app.post("/api/admin/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const admin = await AdminUser.findOne({ username });
+    if (!admin) {
+      return res.status(401).json({ message: "Usuário ou senha incorretos" });
+    }
+
+    // Comparar senha com hash
+    const senhaValida = await bcrypt.compare(password, admin.password);
+    if (!senhaValida) {
+      return res.status(401).json({ message: "Usuário ou senha incorretos" });
+    }
+
+    // Gerar token JWT
+    const token = jwt.sign(
+      { id: admin._id, username: admin.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.json({ token });
+  } catch (err) {
+    console.error("Erro no login admin:", err);
+    res.status(500).json({ message: "Erro interno no servidor" });
+  }
+});
+
+
 app.get("/api/admin/dashboard", verifyAdminToken, async (req, res) => {
   try {
     const { search } = req.query;

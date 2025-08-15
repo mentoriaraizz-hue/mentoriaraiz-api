@@ -137,7 +137,7 @@ app.post("/api/inscricao", async (req, res) => {
       const { nome, idade, email, whatsapp, profissao, empresa} = req.body;
 
       const count = await getIndividualCount();
-      preco = count < 5 ? 0.1 : 3597;
+      preco = count < 5 ? 2997 : 3597;
 
       metadata = {
         tipo,
@@ -164,7 +164,7 @@ app.post("/api/inscricao", async (req, res) => {
         empresaSocio
       } = req.body;
 
-      preco = 0.01;
+      preco = 5597;
 
       metadata = {
         tipo,
@@ -363,16 +363,23 @@ app.get("/api/admin/dashboard", verifyAdminToken, async (req, res) => {
   try {
     const { search } = req.query;
 
-    let filtro = {};
-    if (search && search.trim() !== "") {
-      filtro = {
-        $or: [
-          { nome: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { whatsapp: { $regex: search, $options: "i" } }
-        ]
-      };
-    }
+   let filtro = {};
+if (search && search.trim() !== "") {
+  const regex = { $regex: search, $options: "i" };
+  filtro = {
+    $or: [
+      { nome: regex },
+      { email: regex },
+      { whatsapp: regex },
+      { nomeSocio1: regex },
+      { nomeSocio2: regex },
+      { emailSocio1: regex },
+      { emailSocio2: regex },
+      { whatsappSocio1: regex },
+      { whatsappSocio2: regex }
+    ]
+  };
+}
 
     const inscritos = await Form.find(filtro).lean();
 

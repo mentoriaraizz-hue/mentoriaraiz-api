@@ -158,12 +158,29 @@ app.post("/api/inscricao", async (req, res) => {
    const preference = new Preference(mpClient);
 const result = await preference.create({
   body: {
-    items: [ /* ... */ ],
+    items: [ 
+          {
+            title:
+              tipo === "individual"
+                ? "Mentoria Raiz - Plano Individual"
+                : "Mentoria Raiz - Plano Sócios",
+            description: "Acesso completo à Mentoria Raiz por 3 meses. Encontros ao vivo quinzenais com Thalyta Eloah. Acesso ao grupo exclusivo de mentorados(as). Materiais práticos e exercícios de implementação.  Desafios mensais com foco em progresso real. Uma jornada de 3 meses de transformação.",
+            picture_url: "https://i.postimg.cc/FRB6v5t6/mentoria.png",
+            category_id: "services",
+            quantity: 1,
+            currency_id: "BRL",
+            unit_price: preco,
+          },
+        ],
     payer: {
       name: tipo === "individual" ? metadata.nome : metadata.nomeSocio1,
       email: tipo === "individual" ? metadata.email : metadata.emailSocio1,
     },
-    back_urls: { /* ... */ },
+    back_urls: {
+                success: `${process.env.FRONTEND_URL}/sucesso`,
+                failure: `${process.env.FRONTEND_URL}/falha`,
+                pending: `${process.env.FRONTEND_URL}/pendente`,
+        },
     auto_return: "approved",
     metadata: {
       data: JSON.stringify(metadata) // << tudo serializado como string
@@ -184,8 +201,6 @@ app.post("/api/webhook", async (req, res) => {
   try {
     const payment = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    
-
     if (payment.type === "payment" && payment.data && payment.data.id) {
       const mpResponse = await fetch(
         `https://api.mercadopago.com/v1/payments/${payment.data.id}`,
@@ -198,7 +213,10 @@ app.post("/api/webhook", async (req, res) => {
       const mpData = await mpResponse.json();
 
       if (mpData.status === "approved") {
-        const meta = mpData.metadata || {};
+        // Desserializa o metadata que foi enviado como JSON
+        const metaRaw = mpData.metadata?.data || "{}";
+        const meta = JSON.parse(metaRaw);
+
         let data = {};
 
         if (meta.tipo === "individual") {
@@ -214,14 +232,13 @@ app.post("/api/webhook", async (req, res) => {
             valor: mpData.transaction_amount,
             status: mpData.status,
           };
-        } 
-        else if (meta.tipo === "socios") {
+        } else if (meta.tipo === "socios") {
           data = {
             tipo: meta.tipo,
             nomeSocio1: meta.nomeSocio1,
             idadeSocio1: meta.idadeSocio1,
-            idadeSocio2: meta.idadeSocio2,
             nomeSocio2: meta.nomeSocio2,
+            idadeSocio2: meta.idadeSocio2,
             emailSocio1: meta.emailSocio1,
             emailSocio2: meta.emailSocio2,
             whatsappSocio1: meta.whatsappSocio1,
@@ -234,14 +251,14 @@ app.post("/api/webhook", async (req, res) => {
             status: mpData.status,
           };
         }
-          console.log(mpData.metadata)
+
         const novoCadastro = new Form(data);
         await novoCadastro.save();
 
         console.log("✅ Cadastro confirmado e salvo:", novoCadastro);
 
-        // E-mail de confirmação
-        await enviarEmailConfirmacao(meta.email, meta.nome);
+        // E-mail de confirmação (se precisar, pode desativar temporariamente)
+        // await enviarEmailConfirmacao(meta.email, meta.nome);
       }
     }
 
@@ -250,66 +267,6 @@ app.post("/api/webhook", async (req, res) => {
     console.error("Erro no webhook:", error);
     res.sendStatus(500);
   }
-});
-
-
-// Rota para buscar pagamento pelo ID
-app.get("/api/pagamento/:paymentId", async (req, res) => {
-  try {
-    const { paymentId } = req.params;
-    const response = await fetch(
-      `https://api.mercadopago.com/v1/payments/${paymentId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: "Pagamento não encontrado" });
-    }
-
-    const paymentData = await response.json();
-    res.json(paymentData);
-  } catch (error) {
-    console.error("Erro ao buscar pagamento:", error);
-    res.status(500).json({ error: "Erro interno no servidor" });
-  }
-});
-
-// Páginas simples para sucesso, falha e pendente
-app.get("/sucesso", (req, res) => {
-  res.send("<h1>Pagamento aprovado! Obrigado pela sua compra.</h1>");
-});
-
-app.get("/falha", (req, res) => {
-  res.send("<h1>Pagamento falhou. Tente novamente.</h1>");
-});
-
-app.get("/pendente", (req, res) => {
-  res.send("<h1>Pagamento pendente. Aguarde a confirmação.</h1>");
-});
-
-// Login admin
-app.post("/api/admin/login", async (req, res) => {
-  const { username, password } = req.body;
-  const admin = await AdminUser.findOne({ username });
-  if (!admin) return res.status(401).json({ message: "Usuário ou senha inválidos" });
-   console.log("Senha digitada:", password);
-   console.log("Senha no banco (hash):", admin.password);
-
-  const valid = await bcrypt.compare(password, admin.password);
-
-  if (!valid) return res.status(401).json({ message: "Usuário ou senha inválidos" });
-
-  const token = jwt.sign(
-    { id: admin._id, username: admin.username },
-    process.env.JWT_SECRET,
-    { expiresIn: "2h" }
-  );
-
-  res.json({ token });
 });
 
 

@@ -98,7 +98,7 @@ async function enviarEmailConfirmacao(meta) {
         <h2>Olá ${meta.nomeSocio1},</h2>
         <p>Seu pagamento do <strong>Plano Sócios</strong> foi aprovado com sucesso!</p>
         <p>Entre no nosso grupo exclusivo pelo link abaixo:</p>
-        <a href="https://chat.whatsapp.com/KOpFkKvy1ES5LdVGCbSJ3u">Grupo Especial Mentoria Raiz</a>
+        <a href="https://wa.me/5521972069595">Entre em contato com a thalyta</a>
         <p>Obrigado por confiar em nossa mentoria.</p>
       `,
     };

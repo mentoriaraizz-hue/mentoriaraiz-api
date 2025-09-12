@@ -136,8 +136,8 @@ app.post("/api/inscricao", async (req, res) => {
     if (tipo === "individual") {
       const { nome, idade, email, whatsapp, profissao, empresa} = req.body;
 
-      const count = await getIndividualCount();
-      preco = count < 5 ? 2997 : 3597;
+      
+      preco = 3597;
 
       metadata = {
         tipo,
